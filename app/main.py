@@ -5,9 +5,17 @@ from psycopg2.extras import RealDictCursor
 import time
 from sqlalchemy.orm import Session
 from app import schemas
+from passlib.context import CryptContext
 from .import models 
 from .database import engine, get_db
 from fastapi.middleware.cors import CORSMiddleware
+from passlib.context import CryptContext
+
+crypt_context = CryptContext(
+    schemes=["bcrypt_sha256"],
+    deprecated="auto") # default hashing algorithm for password hashing
+
+
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -49,10 +57,10 @@ def get_posts(db: Session = Depends(get_db)):
 
 @app.post("/posts", status_code=status.HTTP_201_CREATED, response_model=schemas.PostResponse)
 def create_post(post: schemas.PostCreate, db: Session = Depends(get_db)):
-    new_post = models.Post(**post.model_dump())
+    new_post = models.Post(**post.model_dump())    #unpacking post data into Post model
     db.add(new_post)
     db.commit()
-    db.refresh(new_post)  # fetch created post with ID
+    db.refresh(new_post)  # fetch/return created post with ID
     return new_post
 
 
@@ -93,16 +101,20 @@ def update_post(id: int, updated_post: schemas.PostCreate, db: Session = Depends
     if not post:
         raise HTTPException(status_code=404, detail=f"Post with id {id} not found")
     
+    # Update directly in DB without syncing in-memory objects (faster), we refresh manually afterward
     post_query.update(updated_post.model_dump(), synchronize_session=False)
     db.commit()
     db.refresh(post)
     return post
 
 
-@app.post("/users", status_code=status.HTTP_201_CREATED,response_model=schemas.UserResponse)
-def create_user(user: schemas.UserCreate,  db: Session = Depends(get_db)):
+@app.post("/users", status_code=status.HTTP_201_CREATED, response_model=schemas.UserResponse)
+def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    hashed_password = crypt_context.hash(user.password)
+    user.password = hashed_password
+
     new_user = models.User(**user.model_dump())
     db.add(new_user)
     db.commit()
-    db.refresh(new_user)  # fetch created user with ID
+    db.refresh(new_user)
     return new_user

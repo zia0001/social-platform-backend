@@ -29,6 +29,7 @@ class UserResponse(BaseModel):
     email: EmailStr
     created_at: datetime
     
+    # Allow Pydantic to create this model from ORM objects (read attributes directly instead of dict)
     class Config:
         from_attributes = True
 
